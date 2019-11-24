@@ -1,0 +1,935 @@
+---
+title: "Population Growth + Prosperity"
+author: "Hunter Hall, Rebecca Elliott, Gio Rocco, Eric Jones, & Soumaila Ouedraogo"
+date: "11/16/2019"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',
+                      echo=FALSE, warning=FALSE, message=FALSE)
+```
+# **Introduction and Discussion of Ohio's Sources of Population Growth**
+# We use Legatum's Prosperity Index and the US Census' population estimates for 2010 through 2018.
+
+Legatum's Prosperity Index took a load of economic indicators from each state and compiled them into an index that allowed them to rank each state by their new prosperity indicator.
+
+## **Examination of the aspects of Ohio's population growth***
+```{r}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(reshape2) # for melting from wide to long dataframes
+library(scales) # for setting graph scales
+```
+
+```{r}
+
+# Loading the data 
+# There is a Unicode UTF-8 BOM
+# http://en.wikipedia.org/wiki/Byte_order_mark at the beginning
+# of the file, which adds ï.. to the beginning of the first value. 
+# Appending fileEncoding = "UTF-8-BOM" makes R ignore the file encoding
+# and removes the additional characters.
+setwd('C:/Users/Hunter Hall/Google Drive/Cincinnati/Class/eda_project/')
+census_data <- read.csv("census data_eric.csv", fileEncoding = "UTF-8-BOM")
+census<-as.data.frame(read.csv("census data.csv"))
+prosperity<-as.data.frame(read.csv("prosperity.csv"))
+pillars<-data.frame(read.csv("pillars.csv"))
+state <- read.csv("Pillars_x11.csv")
+state.data <- read.csv("census data.csv")
+PI <- read.csv("prosperity index.csv")
+
+```
+
+```{r}
+# lowering cases!
+
+census_data$NAME <- tolower(census_data$NAME)
+names(census_data) <- tolower(names(census_data))
+```
+
+```{r}
+# Now we pull only out ohio data. 
+# The 2010 entries are significantly different from the rest
+# of the entries, so you can't compare them with the rest of the data.
+
+ohio_data_raw <- census_data %>%
+  select(-name, -contains("2010")) %>%
+  slice(41)
+```
+
+```{r}
+# Reformatting the data into a usable shape
+
+titles <- c("year",
+            "popestimate",
+            "npopchg",
+            "births",
+            "deaths",
+            "naturalinc",
+            "internationalmig",
+            "domesticmig",
+            "netmig",
+            "residual",
+            "rbirth",
+            "rdeath",
+            "rnaturalinc",
+            "rinternationalmig",
+            "rdomesticmig",
+            "rnetmig"
+            )
+y2011 <- ohio_data_raw %>%
+  select(ends_with("2011"))
+y2011 <- cbind("2011", y2011)
+colnames(y2011) <- titles
+
+y2012 <- ohio_data_raw %>%
+  select(ends_with("2012"))
+y2012 <- cbind("2012", y2012)
+colnames(y2012) <- titles
+
+y2013 <- ohio_data_raw %>%
+  select(ends_with("2013"))
+y2013 <- cbind("2013", y2013)
+colnames(y2013) <- titles
+
+y2014 <- ohio_data_raw %>%
+  select(ends_with("2014"))
+y2014 <- cbind("2014", y2014)
+colnames(y2014) <- titles
+
+y2015 <- ohio_data_raw %>%
+  select(ends_with("2015"))
+y2015 <- cbind("2015", y2015)
+colnames(y2015) <- titles
+
+y2016 <- ohio_data_raw %>%
+  select(ends_with("2016"))
+y2016 <- cbind("2016", y2016)
+colnames(y2016) <- titles
+
+y2017 <- ohio_data_raw %>%
+  select(ends_with("2017"))
+y2017 <- cbind("2017", y2017)
+colnames(y2017) <- titles
+
+y2018 <- ohio_data_raw %>%
+  select(ends_with("2018"))
+y2018 <- cbind("2018", y2018)
+colnames(y2018) <- titles
+
+ohio_data_yr <- rbind(y2011,
+                      y2012,
+                      y2013,
+                      y2014,
+                      y2015,
+                      y2016,
+                      y2017,
+                      y2018
+                      )
+
+ohio_data_yr$year <- as.numeric(as.character(ohio_data_yr$year))
+```
+
+
+```{r}
+# cleaning the environment
+
+rm(ohio_data_raw,
+   y2011,
+   y2012,
+   y2013,
+   y2014,
+   y2015,
+   y2016,
+   y2017,
+   y2018,
+   titles)
+```
+
+```{r}
+# And now we plot our data
+
+ohio_totals <- ohio_data_yr %>%
+  select(year, npopchg, naturalinc:netmig) %>%
+  melt(id.var = "year") %>%
+  mutate(variable = replace(as.character(variable), variable == "naturalinc", "Natural Increase"),
+         variable = replace(as.character(variable), variable == "internationalmig", "International Migration"),
+         variable = replace(as.character(variable), variable == "domesticmig", "Domestic Migration"),
+         variable = replace(as.character(variable), variable == "netmig", "Net Migration"),
+         variable = replace(as.character(variable), variable == "npopchg", "Total Change")
+         )
+
+ggplot(ohio_totals, aes(x = year, y = value, color = variable)) +
+  geom_line(size = 1.25) +
+  ggtitle("Sources of Population Change") +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.title = element_blank(),
+        legend.title = element_blank(),
+        panel.grid.major.y = element_line(color = "black")
+        ) +
+  scale_y_continuous(label = comma)
+```
+
+
+
+
+
+
+# **Introduction to Prosperity Growth Rates**
+# **+ Measures of Correlation**
+Now that we know a little bit about the prosperity measurement and where certain states land, let's take a look at growth 
+rates and a possible correlation between net population change.
+
+ 
+```{r Setup}
+library(dplyr)
+library(RColorBrewer) #for fun colors!
+library(ggplot2)
+library(tidyr)
+library(reshape2) #for melting, in case it's necessary.
+library(lubridate) #for working with dates. 
+library(esquisse) #for making some graphs with Shiny.
+library(knitr)
+library(kableExtra)
+library(corrplot) #for help with correlations. 
+library(Hmisc) #for specific correlation functions. 
+library(corrr) #for more correlation functions. 
+library(magrittr) 
+library(plotly) #for fun graphs.
+```
+
+
+```{r}
+
+prosperity<-prosperity %>%
+  dplyr::rename(area_name = ï..area_name) %>%
+  dplyr::select(area_name, area_group,score_2010,score_2011,score_2012,score_2013,score_2014,score_2015,score_2016,score_2017,score_2018,score_2019)
+census2<-census%>%
+  dplyr::select(-SUMLEV,-REGION,-DIVISION)
+pillars<-pillars %>%
+  dplyr::rename(area_name = ï..area_name) %>%
+  dplyr::select(area_name, area_group,pillar_name,score_2010,score_2011,score_2012,score_2013,score_2014,score_2015,score_2016,score_2017,score_2018,score_2019)
+pillars<- pillars %>%
+  rename("2010" = score_2010,"2011" = score_2011, "2012" = score_2012, "2013" = score_2013, "2014" = score_2014, "2015" = score_2015, "2016" = score_2016, "2017" = score_2017, "2018" = score_2018, "2019" = score_2019)
+pillar_time<-pillars %>%
+  gather(Year, Value, "2010":"2019") %>%
+  spread(pillar_name, Value)
+regional<- pillars%>%
+  filter(area_group=="Midwest") %>%
+  gather(Year, Value, "2010":"2019") 
+borderstates<- pillars%>%
+  filter(area_name == "Ohio" | area_name == "Kentucky" | area_name == "Indiana" | area_name == "West Virginia" |area_name == "Pennsylvania" |
+           area_name=="Michigan") %>%
+  gather(Year, Value, "2010":"2019")
+ohio<-pillars %>%
+  filter(area_name=="Ohio") %>%
+  gather(Year, Value, "2010":"2019")
+```
+
+```{r}
+wanted_var<- c("Year","Business Environment","Economic Quality", "Education", "Governance", "Health", "Living Conditions", "Market Access & Infrastructure","Natural Environment", "Personal Freedom", "Safety & Security", "Social Capital")
+pillar_names<-c("Business Environment","Economic Quality", "Education", "Governance", "Health", "Living Conditions", "Market Access & Infrastructure","Natural Environment", "Personal Freedom", "Safety & Security", "Social Capital")
+border_states <- c("Ohio","Kentucky","Indiana","West Virginia","Pennsylvania","Michigan")
+```
+
+```{r}
+pillar_census<-pillar_time%>%
+  inner_join(census, by = c("area_name" = "NAME"), name= "State") %>%
+  inner_join(prosperity, by = "area_name") %>%
+  rename("2010avg"="score_2010","2011avg"="score_2011","2012avg"="score_2012","2013avg"="score_2013","2014avg"="score_2014","2015avg"="score_2015","2016avg"="score_2016","2017avg"="score_2017","2018avg"="score_2018","2019avg"="score_2019")
+```
+
+## Check the Correlations
+One of our primary goals was to understand how population change was correlated with the particular measures of prosperity. 
+To get there, we produced a correlation matrix, a correlation plot, and a simple bar chart. 
+```{r}
+corrs<- pillar_census %>%
+  dplyr::select(NPOPCHG_2018,`Business Environment`,`Economic Quality`,Education,Governance,Health,`Living Conditions`,
+         `Market Access & Infrastructure`,`Natural Environment`,`Personal Freedom`,`Safety & Security`,`Social Capital`) 
+corrsc<- corrs %>%
+  correlate() %>%
+  focus(NPOPCHG_2018) 
+corrsc
+#corvarsp<-rcorr(cor(corrs))
+#corvarsp
+corrplot(cor(corrs), type="upper", order="hclust")
+corrsg<- corrsc %>% 
+  mutate(rowname = factor(rowname, levels = rowname[order(NPOPCHG_2018)])) %>%  
+  ggplot(aes(x = rowname, y = NPOPCHG_2018, fill=rowname)) +
+  geom_bar(stat = "identity") +
+  ylab("Correlation with Population Change: 2018") +
+  xlab("Prosperity Measure")+
+  labs(title = "Correlation with Population Change", fill = "Prosperity Measure")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+corrsg
+```
+
+We can see that individual measures of prosperity have a relationship with population change, but not a big one. 
+Half of the measures relate positively; half relate negatively.
+Social capital and economic quality have the strongest correlations. 
+
+## Fit a Regression
+We also wanted to understand how we could best predict population change by prosperity.
+To do this, we ran a normal linear regression.
+```{r}
+predpop<-lm(NPOPCHG_2018 ~ `Business Environment`+`Economic Quality`+Education+Governance+Health+
+                `Living Conditions`+`Market Access & Infrastructure`+`Natural Environment`+
+                `Personal Freedom`+`Safety & Security`+`Social Capital`,data=pillar_census)
+summary(predpop)
+```
+
+In predicting population change with individual measures of prosperity, the model explains 24% of population change. 
+
+## Examine the Growth Rate
+Our final goal for this section was to see how the growth rate of Ohio fared against that of other states. 
+Here, we create two new data frames to compare growth rates and we build two new models which incorporate growth.
+```{r}
+pillar_growth <- pillar_census %>%
+  mutate(growth = (`2019avg` - `2011avg`)/`2011avg`) 
+pg_ohio<-pillar_growth %>%
+  filter(area_name %in% border_states) %>%
+  group_by(area_name) %>%
+  summarise(mean(growth))
+pg_ohio
+predpop3<- lm(NPOPCHG_2018 ~ growth, data=pillar_growth)
+summary(predpop3)
+predpop4<- lm (NPOPCHG_2018 ~ `Business Environment`+`Economic Quality`+Education+Governance+Health+
+                `Living Conditions`+`Market Access & Infrastructure`+`Natural Environment`+
+                `Personal Freedom`+`Safety & Security`+`Social Capital` + growth,data=pillar_growth)
+summary(predpop4)
+```
+
+Among bordering states, Pennsylvania and Ohio have the lowest rates of prosperity growth.
+Indiana has the highest. Putting growth into the same model as before explains another 5%. 
+
+```{r}
+pillar_time <- pillar_time %>%
+  mutate(avgprosp = rowMeans(dplyr::select(.,4:14)))
+pt_growth <- pillar_time %>%
+  group_by(area_name) %>%
+  mutate(growdiff = avgprosp - lag(avgprosp)) %>%
+  mutate(perchange = growdiff / lag(avgprosp))
+borders2<- borderstates %>%
+  group_by(area_name,Year) %>%
+  summarise(avg_prosp= mean(Value))
+borders3<- pt_growth %>%
+  filter(area_name %in% border_states)
+regional2<- regional %>%
+  group_by(area_name,Year) %>%
+  summarise(avg_prosp= mean(Value))
+ohio2<- pillar_census %>%
+  filter(area_name =="Ohio")%>%
+  select(-c(BIRTHS2010:RNETMIG2018))
+ohio2<-ohio2[1:9,]
+PopChange<-data.frame()
+for (i in 27:35){
+  PopChange[i,1]<-ohio2[1,i]
+}
+PopChange<-PopChange[27:35,1]
+ohio5<-cbind(ohio2,"PopChange"=PopChange)
+AverageScore<-data.frame()
+for (i in 37:45){
+  AverageScore[i,1]<-ohio5[1,i]
+}
+AverageScore<-AverageScore[37:45,1]
+ohio6<-cbind(ohio5,"AverageScore"=AverageScore)
+ohio7<-ohio6 %>%
+  select(-c(CENSUS2010POP:`2019avg`)) %>%
+  mutate(growdiff = AverageScore - lag(AverageScore)) %>%
+  mutate(perchange = growdiff / lag(AverageScore))%>%
+  mutate(popdiff = PopChange-lag(PopChange)) %>%
+  mutate(perpop = popdiff / lag(PopChange))
+
+rightside <- list(
+  tickfont = list(color = "navy"),
+  overlaying = "y",
+  side = "right",
+  title = "Average Score")
+```
+
+# Now, let's plot.
+
+## Is prosperity in Ohio comparable to bordering states? 
+
+```{r}
+borders2 %>%
+  group_by(area_name) %>%
+  plot_ly(x= ~Year, y = ~avg_prosp, type = "scatter", mode= "lines+markers", split=~area_name, color=~area_name,
+          colors="Paired") %>%
+  layout(title = "Prosperity in Border States Over Time",
+         xaxis=list(title="Year"),
+         yaxis=list(title="Average Prosperity"))
+
+```
+
+## How does prosperity change in border states?  
+
+```{r}
+borders3 %>%
+  group_by(area_name) %>%
+  plot_ly(x= ~Year, y = ~perchange, type = "scatter", mode= "lines+markers", split=~area_name, color=~area_name,
+          colors="Paired") %>%
+  layout(title = "Percent Change in Prosperity Over Time",
+         xaxis=list(title="Year"),
+         yaxis=list(title="Average Prosperity"))
+```
+
+## What does prosperity look like in Ohio?
+
+```{r}
+ohio %>%
+  plot_ly(x=~Year, y=~Value, color=~pillar_name, split=~pillar_name,
+          colors="Paired",type="scatter",mode="lines+markers")%>%
+  layout(title = "Prosperity in Ohio",
+         xaxis=list(title="Year"),
+         yaxis=list(title="Prosperity Measure"))
+```
+
+## Does the prosperity score have an effect on net population change? 
+
+```{r}
+ohio7 %>%
+  plot_ly() %>%
+  add_trace(x=~Year,y=~PopChange,name='Net Population Change',type="scatter",mode="lines+markers",color="blue") %>%
+  add_trace(x=~Year,y=~AverageScore, name='Average Score',type="scatter",mode="lines+markers",color="green",yaxis="y2")%>%
+  layout(title="Score + Population",
+         xaxis=list(title="Year"),
+         yaxis2=rightside)
+```
+
+## How do the percentage change in population and the average prosperity relate? 
+
+```{r}
+ohio7 %>%
+  plot_ly() %>%
+  add_trace(x=~Year,y=~perpop,name='Population % Change',type= "scatter",mode="lines+markers",color="blue") %>%
+  add_trace(x=~Year,y=~AverageScore, name='Average Score',type="scatter",mode="lines+markers",color="green",yaxis="y2")%>%
+  layout(title="Score + Population",
+         xaxis=list(title="Year"),
+         yaxis2=rightside)
+```
+
+
+
+
+
+
+
+
+
+```{R, echo = FALSE, message = FALSE}
+
+library("leaflet")
+library("htmlwidgets")
+library("rgdal")
+library("tigris")
+library("tidyverse")
+library("data.table")
+library("reshape2")
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(data.table)
+
+
+
+```
+
+
+# Part 1: Comparing Population Change
+
+### Let's order our states by change in population from 2010 - 2028 
+
+```{R}
+
+census <- mutate(census, slope = (POPESTIMATE2018 - POPESTIMATE2010)/POPESTIMATE2010)
+
+#Filter out for states 
+census1 <- filter(census, SUMLEV == 40)
+
+#Filter out unneeded columns
+census2 <- select(census1, NAME, slope, starts_with("popestimate"))
+
+#Arrange the data by slope
+census3 <- arrange(census2, slope)
+
+print(census3[8:18,1:2])
+```
+
+## What states had similar population growth to Ohio?
+
+``` {r, echo = FALSE, message = FALSE}
+
+library(maps)
+library(mapdata)
+```
+
+``` {r}
+map('state', fill = TRUE, col = "darkgray", border = "white", lwd = 1)
+map(database = "usa", lwd = 1, add = TRUE)
+
+map("state", "ohio", col = "blue",
+    lwd = 1, fill = TRUE, add = TRUE)
+map("state", c("new jersey", "new mexico", "michigan", "kansas", "pennsylvania"), col = "red",
+    lwd = 1, fill = TRUE, add = TRUE)
+
+title("Ohio Against the World")
+```
+
+## Were there any irregularities in the annual year-to-year changes in population that need to be understood?
+
+```{R}
+#To rearrange the data for graphing over time
+census4 <- select(census3, NAME, POPESTIMATE2010:POPESTIMATE2018) %>%
+  setnames(c("POPESTIMATE2010", "POPESTIMATE2011", "POPESTIMATE2012",
+             "POPESTIMATE2013", "POPESTIMATE2014", "POPESTIMATE2015",
+             "POPESTIMATE2016", "POPESTIMATE2017", "POPESTIMATE2018"), 
+           c("Y2010", "Y2011", "Y2012", "Y2013",
+             "Y2014", "Y2015", "Y2016", "Y2017", "Y2018")) %>%
+  gather(key = "Year", value = "Population", Y2010:Y2018)
+
+#Filter out to the states with similar growth to Ohio
+similar_states <- filter(census4, NAME %in% c("Michigan", "New Jersey", "New Mexico", "Kansas", "Ohio", "	Pennsylvania"))
+
+#Graphing the annual population changes from 2010 to 2018
+ggplot(similar_states, mapping = aes(x = Year, y = Population, group = NAME, col= NAME)) + geom_line(size = 1) + geom_point(size = 2.5, shape = 17) 
+```
+
+## Not very interesting! 
+
+### Although, compared to states that have had similar growth rates, Ohio has the largest population.
+
+```{r, results='asis', echo=FALSE}
+cat("\\newpage")
+```
+
+
+# Part 2: Comparing PI Change for Similar States
+
+## How do our growth competitors compare by Prosperity Index?
+
+```` {r}
+
+
+#Clean up the PI data
+
+PI_clean <- select(PI, area_name, score_2010:score_2018) %>%
+  setnames(c("score_2010", "score_2011", "score_2012", "score_2013", "score_2014", 
+              "score_2015", "score_2016", "score_2017","score_2018"),
+          c("Y2010", "Y2011", "Y2012", "Y2013", "Y2014", "Y2015", "Y2016", "Y2017", "Y2018")) %>%
+  gather(key = "Year", value = "PI_score", Y2010:Y2018)
+
+#Filter out the states that are not similar to Ohio's population growth from 2010 to 2018
+PI_sim_states <- filter(PI_clean, area_name %in% c("Michigan", "New Jersey", "New Mexico", "Kansas", 
+                                                         "Ohio", "	Pennsylvania"))
+
+#Graph PI Changes for Similar States
+ggplot(PI_sim_states, mapping = aes(x = Year, y = PI_score, group = area_name, col = area_name)) + geom_line(size = 1) + geom_point(size = 2.5, shape = 17) 
+
+```
+
+## Any similarities? Differences?
+
+## Ohio has the largest population and consistently the second lowest PI score, but we have the second largest increase in PI from 2010-2018.
+
+
+``` {r}
+
+#To calculate the changes in PI for each similar state from 2010-2018
+
+PI_slope <- mutate(PI, slopePI = (score_2018 - score_2010)/score_2010) %>% setnames("area_name", "State")
+
+PI_slope1 <- filter(PI_slope, State %in% c("Michigan", "New Jersey", "New Mexico", "Kansas", 
+                                    "Ohio", "	Pennsylvania"))
+PI_slope2 <- select(PI_slope1, State, slopePI, score_2010:score_2018)
+
+PI_slope3 <- arrange(PI_slope2, slopePI)
+
+print(PI_slope3[1:5,1:2])
+
+```
+## Whose PI was the highest?
+ 
+ 
+``` {r, echo = FALSE, message = FALSE}
+land_area <- read_csv("Land_Area_Data.CSV") 
+
+```
+
+# Part 3: Density
+
+``` {r, message = FALSE, warning = FALSE}
+
+#Creat new data frame for testing relationship between density and changes in PI
+
+joined_data <- PI_slope %>% inner_join(land_area) 
+
+ggplot(data = joined_data, aes(x = slopePI, y = Density)) + 
+  geom_point(size = 2.5, shape = 17) + 
+  geom_smooth(method = lm, se = FALSE, size = 1)
+
+```
+
+## How is that outlier skewing the data?
+
+``` {r, message = FALSE}
+#Delete Washington DC because it was skewing data
+joined_cleaner <- joined_data[-c(9),]
+
+
+
+#graphing relationship between change in PI and density
+ggplot(data = joined_cleaner, aes(x = slopePI, y = Density)) + 
+  geom_point(size = 2.5, shape = 17) + 
+  geom_smooth(method = lm, se = FALSE, size = 1)
+
+#is there significance?
+Regression_test <- lm(slopePI ~ Density + Land.Area, data = joined_cleaner)
+summary(Regression_test)
+
+```
+
+## Density is not really significant nor is the graph extremely interesting.
+
+## What about Land Area?
+
+``` {r}
+ggplot(data = joined_cleaner, aes(x = slopePI, y = Land.Area)) + 
+  geom_point(size = 2.5, shape = 17) + 
+  geom_smooth(method = lm, se = FALSE, size = 1)
+
+```
+
+## Let's remove the Land Area outlier to see what happens.
+
+``` {r}
+joined_cleaner2 <- joined_cleaner[-c(2),]
+
+ggplot(data = joined_cleaner2, aes(x = slopePI, y = Land.Area)) + 
+  geom_point(size = 2.5, shape = 17) + geom_smooth(method = lm, se = FALSE)
+  
+
+Regression_test2 <- lm(slopePI ~ Density + Land.Area, data = joined_cleaner2)
+summary(Regression_test2)
+
+```
+
+## Land Area becomes a less significant variable.
+
+
+
+
+
+
+
+
+
+## Comparing Ohio to Indiana and Kentucky
+
+``` {r, error = FALSE}
+#non interactive radar plot
+#install.packages("hrbrthemes")
+#install.packages("fmsb")
+#install.packages("colormap")
+
+library(tidyverse)
+library(data.table) #setnames
+library(viridis) #this does something with colors
+library(hrbrthemes) #this does something with colors
+library(fmsb) #has the radar plot
+library(colormap) #more colors
+
+state <- read.csv("Pillars_x11.csv")
+
+#tidying the data
+state.radar <- select(state, area_code, pillar_name, score_2019) %>%
+  filter(area_code %in% c("OH", "IN", "KY")) %>%
+  spread(pillar_name, score_2019) %>%
+  setnames("area_code", "PI") %>%
+  select("Business Environment":"Social Capital")
+row.names(state.radar) <- c("IN", "KY", "OH")
+
+# To use the fmsb package, I have to add 2 lines to the dataframe: the max and min of each topic to show on the plot!
+state.radar2 <-rbind(rep(70,11) , rep(0,11) , state.radar)
+
+
+# Prepare color
+colors_border=c(rgb(0.8,0.2,0.5,0.9), rgb(0.5,0.8,0.2,0.9), rgb(0.2,0.5,0.5,0.9))
+colors_in=c( rgb(0.8,0.2,0.5,0.4), rgb(0.5,0.8,0.2,0.4), rgb(0.5,0.5,0.5,0.4))
+
+#Prepare names
+statenames <- c("Indiana", "Kentucky", "Ohio")
+
+# Custom the radarChart !
+
+
+radarplot <- radarchart(state.radar2, axistype = 1, centerzero = TRUE, seg = 7,
+            #custom polygon
+            pcol = colors_border, pfcol = colors_in, plwd=4, plty=1,
+            #custom the grid
+            cglcol="grey", cglty=1, axislabcol="grey", caxislabels=seq(0,70,10), cglwd=1.1,
+            #custom labels
+            vlcex=0.8, title = "Prosperity Index State Comparison 2018") 
+            # legend
+            #legend(1, 1, legend = statenames, bty = "n", pch=20 , col=colors_border, cex=0.9, pt.cex=1.6)
+
+```
+
+### Comparing Prosperity Index Scores for 2018
+```{r}
+#plot(radarplot)
+```
+
+## Changes in PI and Death Rate
+If a state becomes safer and healthier (as represented by the PI scores: Health, Living Conditions, and Safety and Security), does the death rate decline?
+
+```{r}
+library(dplyr) 
+library(ggplot2)
+library(tidyr)
+library(data.table) #to get setnames function
+
+
+
+#indexing the death rate from 2011, setting it to percent change so it is on the 
+#same scale as the prosperity index, tidying up the data
+state.death <- select(state.data, NAME, RDEATH2011:RDEATH2018) %>%
+  setnames(c("RDEATH2011", "RDEATH2012", "RDEATH2013",
+             "RDEATH2014", "RDEATH2015", "RDEATH2016",
+             "RDEATH2017", "RDEATH2018"), 
+           c("Y2011", "Y2012", "Y2013", "Y2014",
+             "Y2015", "Y2016", "Y2017", "Y2018")) %>%
+  mutate( change.2012 = (Y2012 - Y2011) / Y2011 * 100,
+          change.2013 = (Y2013 - Y2011) / Y2011 * 100,
+          change.2014 = (Y2014 - Y2011) / Y2011 * 100,
+          change.2015 = (Y2015 - Y2011) / Y2011 * 100,
+          change.2016 = (Y2016 - Y2011) / Y2011 * 100,
+          change.2017 = (Y2017 - Y2011) / Y2011 * 100,
+          change.2018 = (Y2018 - Y2011) / Y2011 * 100)
+
+#reorganizing the data so it is easier to plot
+state.death.change <- select(state.death, NAME, change.2012:change.2018) %>%
+  gather(key = "year.change", value = "Change in Death Rate",
+         "change.2012":"change.2018")
+
+#Indexing prosperity index data and tidying
+prosperity.index.filter <- select(state, area_name, pillar_name, score_2011:score_2018) %>%
+  filter(pillar_name %in% c("Health", "Living Conditions", 
+                            "Safety & Security")) %>%
+  mutate(change.2012 = (score_2012 - score_2011) / score_2011 * 100,
+         change.2013 = (score_2013 - score_2011) / score_2011 * 100,
+         change.2014 = (score_2014 - score_2011) / score_2011 * 100,
+         change.2015 = (score_2015 - score_2011) / score_2011 * 100,
+         change.2016 = (score_2016 - score_2011) / score_2011 * 100,
+         change.2017 = (score_2017 - score_2011) / score_2011 * 100,
+         change.2018 = (score_2018 - score_2011) / score_2011 * 100)
+
+prosperity.death <- select(prosperity.index.filter, area_name, pillar_name, 
+                           change.2012:change.2018) %>%
+  gather(key = "year.change", value = "percent.change.pi", 
+         "change.2012":"change.2018") %>%
+  spread(pillar_name, percent.change.pi)
+
+#joining to to dataframes
+new.df <- inner_join(prosperity.death, state.death.change, 
+                     by = c("area_name" = "NAME", "year.change")) %>%
+  gather(key = "category", value = "percent.change", "Health":
+           "Change in Death Rate")
+
+#filtering to just what I want
+new.df2 <- filter(new.df, area_name %in% c("Ohio", "Kentucky", "Indiana")) 
+
+#adding a facet wrap by category
+chart1 <- ggplot(new.df2, aes(x = year.change, y = percent.change, group = interaction(area_name, category), color = area_name)) +
+  geom_line(aes(linetype = category)) +
+  geom_point(aes(shape = area_name)) +
+  facet_wrap(~category)
+
+finchart <- chart1 + scale_x_discrete(labels=c("change.2012" = "2012", "change.2013" = "2013",
+                                   "change.2014" = "2014", "change.2015" = "2015",
+                                   "change.2016" = "2016", "change.2017" = "2017",
+                                   "change.2018" = "2018")) +
+  xlab("Year to Year Change") +
+  ylab("Percentage Change") +
+  scale_color_discrete(name = "State") +
+  scale_linetype_discrete(name = "Category") +
+  scale_shape(guide = FALSE) +
+  ggtitle("PI Comparisons by State and PI Category")
+
+```
+
+### Plot
+Comparing PI Scores and Death Rates for Ohio, Indiana, and Kentucky from 2011-2018: 
+
+```{r}
+plot (finchart)
+
+```
+
+## Ohio's PI and Death Rate
+Let's Examine Ohio more closely over time, let's organize our data first:
+
+```{r}
+
+
+#indexing the death rate from 2011, setting it to percent change so it is on the 
+#same scale as the prosperity index, tidying up the data
+state.death <- select(state.data, NAME, RDEATH2011:RDEATH2018) %>%
+  setnames(c("RDEATH2011", "RDEATH2012", "RDEATH2013",
+             "RDEATH2014", "RDEATH2015", "RDEATH2016",
+             "RDEATH2017", "RDEATH2018"), 
+           c("Y2011", "Y2012", "Y2013", "Y2014",
+             "Y2015", "Y2016", "Y2017", "Y2018")) %>%
+  mutate( change.2012 = (Y2012 - Y2011) / Y2011 * 100,
+          change.2013 = (Y2013 - Y2011) / Y2011 * 100,
+          change.2014 = (Y2014 - Y2011) / Y2011 * 100,
+          change.2015 = (Y2015 - Y2011) / Y2011 * 100,
+          change.2016 = (Y2016 - Y2011) / Y2011 * 100,
+          change.2017 = (Y2017 - Y2011) / Y2011 * 100,
+          change.2018 = (Y2018 - Y2011) / Y2011 * 100)
+
+#reorganizing the data so it is easier to plot
+state.death.change <- select(state.death, NAME, change.2012:change.2018) %>%
+  gather(key = "year.change", value = "Change in Death Rate",
+         "change.2012":"change.2018")
+
+#Indexing prosperity index data and tidying
+prosperity.index.filter <- select(state, area_name, pillar_name, score_2011:score_2018) %>%
+  filter(pillar_name %in% c("Health", "Living Conditions", 
+                            "Safety & Security")) %>%
+  mutate(change.2012 = (score_2012 - score_2011) / score_2011 * 100,
+         change.2013 = (score_2013 - score_2011) / score_2011 * 100,
+         change.2014 = (score_2014 - score_2011) / score_2011 * 100,
+         change.2015 = (score_2015 - score_2011) / score_2011 * 100,
+         change.2016 = (score_2016 - score_2011) / score_2011 * 100,
+         change.2017 = (score_2017 - score_2011) / score_2011 * 100,
+         change.2018 = (score_2018 - score_2011) / score_2011 * 100)
+
+prosperity.death <- select(prosperity.index.filter, area_name, pillar_name, 
+                           change.2012:change.2018) %>%
+  gather(key = "year.change", value = "percent.change.pi", 
+         "change.2012":"change.2018") %>%
+  spread(pillar_name, percent.change.pi)
+
+#joining to to dataframes
+new.df <- inner_join(prosperity.death, state.death.change, 
+                     by = c("area_name" = "NAME", "year.change")) %>%
+  gather(key = "category", value = "percent.change", "Health":
+           "Change in Death Rate")
+
+#filtering to just Ohio death and one category
+
+new.df.oh.h <- filter(new.df, area_name == "Ohio") %>%
+               filter(category %in% c("Health", "Change in Death Rate"))
+
+new.df.oh.lc <- filter(new.df, area_name == "Ohio") %>%
+  filter(category %in% c("Living Conditions", "Change in Death Rate"))
+
+new.df.oh.ss <- filter(new.df, area_name == "Ohio") %>%
+  filter(category %in% c("Safety & Security", "Change in Death Rate"))
+
+```
+
+### Ohio Charts
+Here we can examine how the Health PI score and death rate have changed over time.
+Let's start with Health
+
+```{r}
+#ohio health
+chart.ohio.h <- ggplot(new.df.oh.h, aes(x = year.change, y = percent.change, group = category, color = category)) +
+  geom_line()
+
+
+ohiochart1 <- chart.ohio.h + scale_x_discrete(labels=c("change.2012" = "2012", "change.2013" = "2013",
+                                   "change.2014" = "2014", "change.2015" = "2015",
+                                   "change.2016" = "2016", "change.2017" = "2017",
+                                   "change.2018" = "2018")) +
+  xlab("Year to Year Change") +
+  ylab("Percentage Change") +
+  scale_color_discrete(name = "Category") +
+  ggtitle("Ohio Comparison of Changes in Health Ranking and Death Rate")
+
+```
+
+### Plot
+
+```{r}
+plot(ohiochart1)
+```
+
+Now let's examine how Living Conditions have changed
+
+```{r}
+#ohio living conditions 
+
+chart.ohio.lc <- ggplot(new.df.oh.lc, aes(x = year.change, y = percent.change, group = category, color = category)) +
+  geom_line()
+
+
+ohiochart2 <- chart.ohio.lc + scale_x_discrete(labels=c("change.2012" = "2012", "change.2013" = "2013",
+                                         "change.2014" = "2014", "change.2015" = "2015",
+                                         "change.2016" = "2016", "change.2017" = "2017",
+                                         "change.2018" = "2018")) +
+  xlab("Year to Year Change") +
+  ylab("Percentage Change") +
+  scale_color_discrete(name = "Category") +
+  ggtitle("Ohio Comparison of Changes in Living Conditions Rating and Death Rate")
+```
+
+### Plot
+
+```{r}
+plot(ohiochart2)
+```
+
+And finally Safety and Security
+
+```{r}
+#ohio safety and security 
+chart.ohio.ss <- ggplot(new.df.oh.ss, aes(x = year.change, y = percent.change, group = category, color = category)) +
+  geom_line()
+
+
+ohiochart3 <- chart.ohio.ss + scale_x_discrete(labels=c("change.2012" = "2012", "change.2013" = "2013",
+                                          "change.2014" = "2014", "change.2015" = "2015",
+                                          "change.2016" = "2016", "change.2017" = "2017",
+                                          "change.2018" = "2018")) +
+  xlab("Year to Year Change") +
+  ylab("Percentage Change") +
+  scale_color_discrete(name = "Category") +
+  ggtitle("Ohio Comparison of Changes in Safety & Security Rating and Death Rate")
+```
+
+### Plot
+
+```{r}
+plot(ohiochart3)
+```
+
+<!-- ```{r} -->
+<!-- prosperity.index.filter <- state %>% -->
+<!--   select(area_name, pillar_name, score_2009:score_2018) %>% -->
+<!--   filter(area_name == "Ohio") %>% -->
+<!--   gather(key = "year", value = "year.score", "score_2009":"score_2018") -->
+
+<!-- ohiochart <- ggplot(prosperity.index.filter, aes(x = year, y = year.score, group = pillar_name, color = pillar_name)) + -->
+<!--   geom_line() -->
+
+<!-- ohiochart + scale_x_discrete(labels=c("score_2009" = "2009", "score_2010" = "2010",  -->
+<!--                                       "score_2011" = "2011", "score_2012" = "2012", -->
+<!--                                       "score_2013" = "2013", "score_2014" = "2014",  -->
+<!--                                       "score_2015" = "2015", "score_2016" = "2016", -->
+<!--                                       "score_2017" = "2017", "score_2018" = "2018")) + -->
+<!--   xlab("Year to Year Change") + -->
+<!--   ylab("Prosperity Index Score") + -->
+<!--   scale_color_discrete(name = "Pillar") + -->
+<!--   ggtitle("Ohio PI Scores Change") -->
+<!-- ``` -->
+
+```{r}
+sessionInfo()
+```
+
