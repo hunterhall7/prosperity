@@ -14,7 +14,7 @@ knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',
 
 Legatum's Prosperity Index took a load of economic indicators from each state and compiled them into an index that allowed them to rank each state by their new prosperity indicator.
 
-## **Examination of the aspects of Ohio's population growth***
+## **Examination of the aspects of Ohio's population growth**
 ```{r}
 library(dplyr)
 library(tidyr)
